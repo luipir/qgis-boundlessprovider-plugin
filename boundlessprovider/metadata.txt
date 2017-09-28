@@ -1,0 +1,17 @@
+[general]
+name=Boundless Algorithm Provider
+description=Provider for Boundless developed algorithms
+qgisMinimumVersion=2.0
+version=1.0
+
+author=Boundless (Luigi Pirelli)
+email=info@boundlessgeo.com
+
+tags=boundless, provider, algorithms
+
+homepage=https://github.com/boundlessgeo/qgis-los-plugin
+tracker=https://github.com/boundlessgeo/qgis-los-plugin/issues
+repository=https://github.com/boundlessgeo/qgis-los-plugin
+
+experimental=False
+deprecated=False
