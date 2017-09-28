@@ -1,3 +1,3 @@
-# QGIS Line of Sight
+# QGIS Boundless provider plugin
 
-Processing provider with Line-of-sight analysis algorithms
+Processing provider with Boundless analysis algorithms
