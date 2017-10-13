@@ -11,11 +11,6 @@ __copyright__ = '(C) Boundless Spatial Inc'
 __revision__ = '$Format:%H$'
 
 import os
-import gdal
-import math
-import numpy.ma as ma
-import matplotlib.pyplot as plt
-import matplotlib.pylab as lab
 
 from qgis.PyQt.QtCore import QVariant
 from qgis.PyQt.QtGui import QIcon
@@ -40,6 +35,13 @@ from processing.core.outputs import (
 from processing.tools import dataobjects, vector, raster
 from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
 
+from geodesy_regex import (
+    dmsLatRegEx,
+    dmsLonRegEx,
+    decimalRegEx,
+    mgrsRegEx,
+    utmRegEx)
+
 
 class CoordinateFormatConversion(GeoAlgorithm):
     """Algorithm to transform coordinate format adding a add a new
@@ -63,10 +65,17 @@ class CoordinateFormatConversion(GeoAlgorithm):
     # OUTPUT_VECTOR = 'OUTPUT_VECTOR'
 
     flat_float_regexp = '[+-]?\d+(\.\d+\s*)?'
-    DMS_lat_regexp = '([+-]?\d+\º)\s*(\d+\')?\s*(\d+\")?\s*([NS]?)'
-    DMS_lon_regexp = '([+-]?\d+\º)\s*(\d+\')?\s*(\d+\")?\s*([EW]?)'
-    DDM_lat_regexp = '([+-]?\d+\º)\s*((\d+)((\.)(\d+))?\')?\s*([NS]?)'
-    DDM_lat_regexp = '([+-]?\d+\º)\s*((\d+)((\.)(\d+))?\')?\s*([EW]?)'
+
+
+    DMS_lat_regexp =  '[+-]?(((90)(\s*)(\/|\:|\s|\º)(\s*)?((0*)(\s*)(\/|\:|\s|\'))?(\s*)((0*)(\.0*)?(\")?)?)|([1-8]?\d)(\/|\:|\s|\º)(\s*)?(([1-5]?\d))(\/|\:|\s|\')(\s*)?[1-5]?\d(\.\d{0,})?(\")?)(\s*)?([nNsS])?'
+    DMS_lon_regexp = '[-+]?(((180)(\s*)(\/|\:|\s|\º)(\s*)?((0*)(\s*)(\/|\:|\s|\'))?(\s*)((0*)(\.0*)?(\")?)?)|(([1]?[1-7]\d)|\d?\d)(\/|\:|\s|\º)(\s*)([1-5]?\d)(\/|\:|\s|\')(\s*)[1-5]?\d(\.\d{0,})?(\"))(\s*)([eEwW])?'
+
+    DDM_lat_regexp =  '[+-]?(((90)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)((0*)(\.0*)?(\')?)?)|([1-8]?\d)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)?[1-5]?\d(\.\d{0,})?(\')?)(\s*)?([nNsS])?'
+    DDM_lon_regexp = '[+-]?(((180)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)((0*)(\.0*)?(\')?)?)|(([1]?[1-7]\d)|\d?\d)(\s*)(\/|\:|\s|\º)(\s*)[1-5]?\d(\.\d{0,})?(\'))(\s*)([eEwW])?'
+
+    DD_lat_regexp = '[+-]?(((90)(\.(0*)))|(([1-8]?\d)(\.(\d*))))((\s*)(\º)?)((\s*)[nNsS])?'
+    DD_lon_regexp = '[+-]?(((180)(\.(0*)))|((([1]?[1-7]\d)|(\d?\d))(\.\d*)?))((\s*)(\º)?)((\s*)[eEwW])?'
+
     FORMAT_LIST = ['DD-Decimal degrees', 'DMS-Degrees-minutes-seconds', 'DDM-Decimal minutes', 'MGRS-Military Grid Reference System', 'UTM-Universal Transverse Mercator']
     FORMAT_REGEXP = [
         {'lat':self.flat_float_regexp, 'lon':self.flat_float_regexp},
