@@ -64,18 +64,6 @@ class CoordinateFormatConversion(GeoAlgorithm):
     OUTPUT_TABLE = 'OUTPUT_TABLE'
     # OUTPUT_VECTOR = 'OUTPUT_VECTOR'
 
-    flat_float_regexp = '[+-]?\d+(\.\d+\s*)?'
-
-
-    DMS_lat_regexp =  '[+-]?(((90)(\s*)(\/|\:|\s|\º)(\s*)?((0*)(\s*)(\/|\:|\s|\'))?(\s*)((0*)(\.0*)?(\")?)?)|([1-8]?\d)(\/|\:|\s|\º)(\s*)?(([1-5]?\d))(\/|\:|\s|\')(\s*)?[1-5]?\d(\.\d{0,})?(\")?)(\s*)?([nNsS])?'
-    DMS_lon_regexp = '[-+]?(((180)(\s*)(\/|\:|\s|\º)(\s*)?((0*)(\s*)(\/|\:|\s|\'))?(\s*)((0*)(\.0*)?(\")?)?)|(([1]?[1-7]\d)|\d?\d)(\/|\:|\s|\º)(\s*)([1-5]?\d)(\/|\:|\s|\')(\s*)[1-5]?\d(\.\d{0,})?(\"))(\s*)([eEwW])?'
-
-    DDM_lat_regexp =  '[+-]?(((90)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)((0*)(\.0*)?(\')?)?)|([1-8]?\d)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)?[1-5]?\d(\.\d+)?(\')?)(\s*)?([nNsS])?'
-    DDM_lon_regexp = '[+-]?(((180)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)((0*)(\.0*)?(\')?)?)|(([1]?[1-7]\d)|\d?\d)(\s*)(\/|\:|\s|\º)(\s*)[1-5]?\d(\.\d+)?(\'))(\s*)([eEwW])?'
-
-    DD_lat_regexp = '[+-]?(((90)(\.(0*)))|(([1-8]?\d)(\.(\d+))))((\s*)(\º)?)((\s*)[nNsS])?'
-    DD_lon_regexp = '[+-]?(((180)(\.(0*)))|((([1]?[1-7]\d)|(\d?\d))(\.\d+)?))((\s*)(\º)?)((\s*)[eEwW])?'
-
     FORMAT_LIST = ['DD-Decimal degrees', 'DMS-Degrees-minutes-seconds', 'DDM-Decimal minutes', 'MGRS-Military Grid Reference System', 'UTM-Universal Transverse Mercator']
     FORMAT_REGEXP = [
         {'lat':self.flat_float_regexp, 'lon':self.flat_float_regexp},
