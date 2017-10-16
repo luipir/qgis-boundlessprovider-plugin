@@ -72,8 +72,7 @@ utmRegEx = "^\d(\/|\:| |)[^aboiyzABOIYZ\d\[-\` -@](\/|\:| |)\d{2,}$"
 
 # used to evaluate if the test is successful
 def unitTester(item, expected, actual):
-    if (not expected) and actual == None:
-        print "NO MATCH:",item
+    if (not expected) and actual == None:print "NO MATCH:",item
     elif expected and actual:
         print "MATCH:",item
     else:
@@ -84,6 +83,10 @@ def unitTester(item, expected, actual):
 def regexCheck(regex, item):
     expr = re.compile(regex)
     m = expr.match(item)
+    if not m:
+        return m
+    if (m.group(0) != item):
+        return None
     return m
 
 
@@ -96,20 +99,28 @@ if __name__ == "__main__":
     print "\nTesting all examples that should show MATCH:"
     for match in dmsLatMatches:
         unitTester(match, True, regexCheck(dmsLatRegEx, match))
-    print "\nTesting all examples that should show NO MATCH:"
-    for fail in dmsLatFails:
-        unitTester(fail, False, regexCheck(DMS_lat_regexp, fail))
-    print "\nTesting all examples that should show MATCH:"
-    for match in dmsLatMatches:
-        unitTester(match, True, regexCheck(DMS_lat_regexp, match))
-    print "\nTesting all examples that should show NO MATCH:"
 
-
+    print "\nTesting all examples that should show NO MATCH:"
     for fail in dmsLonFails:
         unitTester(fail, False, regexCheck(dmsLonRegEx, fail))
     print "\nTesting all examples that should show MATCH:"
     for match in dmsLonMatches:
         unitTester(match, True, regexCheck(dmsLonRegEx, match))
+
+    print "\n----Degrees Minutes Seconds NEW regular expression----"
+    print "Testing all examples that should show NO MATCH:"
+    for fail in dmsLatFails:
+        unitTester(fail, False, regexCheck(DMS_lat_regexp, fail))
+    print "\nTesting all examples that should show MATCH:"
+    for match in dmsLatMatches:
+        unitTester(match, True, regexCheck(DMS_lat_regexp, match))
+
+    print "\nTesting all examples that should show NO MATCH:"
+    for fail in dmsLonFails:
+        unitTester(fail, False, regexCheck(DMS_lon_regexp, fail))
+    print "\nTesting all examples that should show MATCH:"
+    for match in dmsLonMatches:
+        unitTester(match, True, regexCheck(DMS_lon_regexp, match))
 
     print "\n----Testing Decimal coordinates----"
     print "Testing all examples that should show NO MATCH:"
