@@ -11,6 +11,7 @@ __copyright__ = '(C) Boundless Spatial Inc'
 __revision__ = '$Format:%H$'
 
 import os
+import re
 
 from qgis.PyQt.QtCore import QVariant
 from qgis.PyQt.QtGui import QIcon
@@ -36,12 +37,17 @@ from processing.tools import dataobjects, vector, raster
 from processing.core.GeoAlgorithmExecutionException import GeoAlgorithmExecutionException
 
 from geodesy_regex import (
-    dmsLatRegEx,
-    dmsLonRegEx,
-    decimalRegEx,
+    DD_lat_regexp,
+    DD_lon_regexp,
+    DMS_lat_regexp,
+    DMS_lon_regexp,
+    DDM_lat_regexp,
+    DDM_lat_regexp,
     mgrsRegEx,
-    utmRegEx)
+    utmRegEx
+)
 
+from latlontool.mgrs import toMgrs, toWgs
 
 class CoordinateFormatConversion(GeoAlgorithm):
     """Algorithm to transform coordinate format adding a add a new
@@ -64,13 +70,18 @@ class CoordinateFormatConversion(GeoAlgorithm):
     OUTPUT_TABLE = 'OUTPUT_TABLE'
     # OUTPUT_VECTOR = 'OUTPUT_VECTOR'
 
+    DD_index = 0
+    DMS_index = 1
+    DDM_index = 2
+    MGRS_index = 3
+    UTM_index = 4
     FORMAT_LIST = ['DD-Decimal degrees', 'DMS-Degrees-minutes-seconds', 'DDM-Decimal minutes', 'MGRS-Military Grid Reference System', 'UTM-Universal Transverse Mercator']
     FORMAT_REGEXP = [
-        {'lat':self.flat_float_regexp, 'lon':self.flat_float_regexp},
-        {'lat':self.DMS_lat_regexp, 'lon':self.DMS_lon_regexp},
-        {'lat':self.DDM_lat_regexp, 'lon':self.DDM_lat_regexp},
-        , 'MGRS-Military Grid Reference System', 
-        {'lat':self.flat_float_regexp, 'lon':self.flat_float_regexp}]
+        {'lat':re.compile(self.DD_lat_regexp), 'lon':re.compile(self.DD_lon_regexp)},
+        {'lat':re.compile(self.DMS_lat_regexp), 'lon':re.compile(self.DMS_lon_regexp)},
+        {'lat':re.compile(self.DDM_lat_regexp), 'lon':re.compile(self.DDM_lat_regexp)},
+        {'lat':re.compile(self.mgrsRegEx)}, 'lon':re.compile(self.mgrsRegEx)},
+        {'lat':re.compile(self.utmRegEx)}, 'lon':re.compile(self.utmRegEx)}}]
     CUSTOM_COORD_FORMAT = u'{degree}º{minutes}\'{seconds}"'
     SINGLE_FIELD_COORD_FORMAT = '{X} {Y}'
     FIELD_LENGHT = 10
@@ -109,7 +120,7 @@ class CoordinateFormatConversion(GeoAlgorithm):
         OUTPUT_Y_FIELD_value = self.getParameterValue(self.OUTPUT_Y_FIELD)
         OUTPUT_XY_FIELD_value = self.getParameterValue(self.OUTPUT_XY_FIELD)
         if not OUTPUT_X_FIELD_value and not OUTPUT_Y_FIELD_value and not OUTPUT_XY_FIELD_value:
-            raise GeoAlgorithmExecutionException('At least an autput field have to be set')
+            raise GeoAlgorithmExecutionException('At least an output field have to be set')
         
         OUTPUT_COORDINATE_FORMAT_value = self.getParameterValue(self.OUTPUT_COORDINATE_FORMAT)
         if OUTPUT_XY_FIELD_value and not OUTPUT_COORDINATE_FORMAT_value:
@@ -125,9 +136,11 @@ class CoordinateFormatConversion(GeoAlgorithm):
             raise GeoAlgorithmExecutionException('If OUTPUT_XY_FIELD is set, it\'s necessary to set also OUTPUT_COORDINATE_FORMAT' )
 
         # get parameters
+        SOURCE_FORMAT_value = self.getParameterValue(self.SOURCE_FORMAT)
+
         DESTINATION_FORMAT_value = self.getParameterValue(self.DESTINATION_FORMAT)
         fieldType = QVariant.String
-        if DESTINATION_FORMAT_value in [0, 4]: # eg DD and UTM
+        if DESTINATION_FORMAT_value in [DD_index, UTM_index]:
             fieldType = QVariant.Double
 
         output = self.getOutputFromName(self.OUTPUT_TABLE)
@@ -159,8 +172,11 @@ class CoordinateFormatConversion(GeoAlgorithm):
             progress.setPercentage(int(current * total))
             # get source data to transform
             attributes = feat.attributes()
-            x = attributes[sourceXFieldIndex]
-            y = attributes[sourceYFieldIndex]
+            x = str(attributes[sourceXFieldIndex])
+            y = str(attributes[sourceYFieldIndex])
+
+            # from source to dest
+            newX = lonFromSourceToWgs(x, SOURCE_FORMAT_value, DESTINATION_FORMAT_value)
 
             geom = feat.geometry()
             outFeat.setGeometry(geom)
@@ -169,3 +185,137 @@ class CoordinateFormatConversion(GeoAlgorithm):
             outFeat.setAttributes(atMap)
             writer.addFeature(outFeat)
         del writer
+
+    def lonFromSourceToWgs(value, sourceFormatIndex):
+        """Parse and convert Lon value form a format to another.
+        Beaware that regext group position have to be aligned to the 
+        related regexp 
+        """
+        expression = FORMAT_REGEXP[sourceFormatIndex]['lon']
+        match = expression.match(value)
+        # general parsing error
+        if not match:
+            return None
+        # if something does not match but other parts match
+        if match.group(0) != value:
+            return None
+        # now parse 
+        if sourceFormatIndex == DD_index:
+            signItem = match.group(1)
+            eastingNorthingItem = match.group(13)
+            sign = self.giveMeSign(signItem, eastingNorthingItem)
+            degrees = float(match.group(2))
+            return sign * degrees
+        elif sourceFormatIndex == DMS_index:
+            signItem = match.group(1)
+            eastingNorthingItem = match.group(23)
+            sign = self.giveMeSign(signItem, eastingNorthingItem)
+            if match.group(4): # case 180
+                degrees == float(match.group(4))
+                minutes = 0.0
+                seconds = 0.0
+            else: # case any value
+                degrees = float(match.group(14))
+                minutes = float(match.group(17))
+                seconds = float(match.group(19))
+            return sign * degrees + minutes/60.0 + seconds/3600.0
+        elif sourceFormatIndex == DDM_index:
+            signItem = match.group(1)
+            eastingNorthingItem = match.group(18)
+            sign = self.giveMeSign(signItem, eastingNorthingItem)
+            if match.group(4): # case 180
+                degrees == float(match.group(4))
+                minutes = 0.0
+            else: # case any value
+                degrees = float(match.group(11))
+                minutes = float(match.group(14))
+            return sign * degrees + minutes/60.0
+        elif sourceFormatIndex == MGRS_index:
+            # ???????????????
+            pass
+        elif sourceFormatIndex == UTM_index:
+            # ???????????????
+            pass
+        else:
+            raise GeoAlgorithmExecutionException('Invalid SOURCE_FORMAT value' )
+
+    def latFromSourceToWgs(value, sourceFormatIndex):
+        """Parse and convert Lat value form a format to another.
+        Beaware that regext group position have to be aligned to the 
+        related regexp 
+        """
+        expression = FORMAT_REGEXP[sourceFormatIndex]['lat']
+        match = expression.match(value)
+        # general parsing error
+        if not match:
+            return None
+        # if something does not match but other parts match
+        if match.group(0) != value:
+            return None
+        # now parse 
+        if sourceFormatIndex == DD_index:
+            signItem = match.group(1)
+            eastingNorthingItem = match.group(11)
+            sign = self.giveMeSign(signItem, eastingNorthingItem)
+            degrees = float(match.group(2))
+            return sign * degrees
+        elif sourceFormatIndex == DMS_index:
+            signItem = match.group(1)
+            eastingNorthingItem = match.group(22)
+            sign = self.giveMeSign(signItem, eastingNorthingItem)
+            if match.group(4): # case 90
+                degrees == float(match.group(4))
+                minutes = 0.0
+                seconds = 0.0
+            else: # case any value
+                degrees = float(match.group(14))
+                minutes = float(match.group(16))
+                seconds = float(match.group(18))
+            return sign * degrees + minutes/60.0 + seconds/3600.0
+        elif sourceFormatIndex == DDM_index:
+            signItem = match.group(1)
+            eastingNorthingItem = match.group(18)
+            sign = self.giveMeSign(signItem, eastingNorthingItem)
+            if match.group(4): # case 90
+                degrees == float(match.group(4))
+                minutes = 0.0
+            else: # case any value
+                degrees = float(match.group(12))
+                minutes = float(match.group(14))
+            return sign * degrees + minutes/60.0
+        elif sourceFormatIndex == MGRS_index:
+            # ???????????????
+            pass
+        elif sourceFormatIndex == UTM_index:
+            # ???????????????
+            pass
+        else:
+            raise GeoAlgorithmExecutionException('Invalid SOURCE_FORMAT value' )
+
+    def giveMeSign(signItem, eastingNorthingItem):
+        sign = 1
+        # only one can be set
+        if signItem and eastingNorthingItem:
+            raise GeoAlgorithmExecutionException('Malformed value: {}'.format(value) ) 
+        
+        if signItem and signItem == '+':
+            sign = 1
+        else: 
+            sign = -1
+        if eastingNorthingItem and eastingNorthingItem in []'e', 'E', 'n', 'N':
+            sign = 1
+        else: 
+            sign = -1
+        
+        
+    def fromSourceToDest(value, sourceFormatIndex, destFormatIndex, isLat=True):
+        """Parse and convert a value form a format to another.
+        """
+        expression = FORMAT_REGEXP[sourceFormatIndex][isLat? 'lat':'lon']
+        match = expression.match(value)
+        # general parsing error
+        if not match:
+            return None
+        # if something does not match but other parts match
+        if match.group(0) != value:
+            return None

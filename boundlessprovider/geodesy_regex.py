@@ -57,19 +57,19 @@ utmFails = ['4a6109372363778', 'asljkd', '123f', '1a21', '1234', '1/2:123', '1:.
 # regular expressions (all the magic)
 flat_float_regexp = '[+-]?\d+(\.\d+\s*)?'
 
-DMS_lat_regexp = r'[+-]?(((90)(\s*)(\/|\:|\s|\º)(\s*)?((0*)(\s*)(\/|\:|\s|\'))?(\s*)((0*)(\.0*)?(\")?)?)|([1-8]?\d)(\/|\:|\s|\º)(\s*)?(([1-5]?\d))(\/|\:|\s|\')(\s*)?[1-5]?\d(\.\d*)?(\")?)(\s*)?([nNsS])?'
-DMS_lon_regexp = r'[-+]?(((180)(\s*)(\/|\:|\s|\º)(\s*)?((0*)(\s*)(\/|\:|\s|\'))?(\s*)((0*)(\.0*)?(\")?)?)|(([1]?[1-7]\d)|\d?\d)(\/|\:|\s|\º)(\s*)([1-5]?\d)(\/|\:|\s|\')(\s*)[1-5]?\d(\.\d*)?(\")?)(\s*)([eEwW])?'
+DMS_lat_regexp = r'([+-])?(((90)\s*(\/|\:|\s|\º)\s*((0*)\s*(\/|\:|\s|\'))?\s*((0*)(\.(0*))?(\")?)?)|([1-8]?\d)(\/|\:|\s|\º)\s*([1-5]?\d)(\/|\:|\s|\')\s*([1-5]?\d(\.(\d*))?)(\")?)\s*([nNsS])?'
+DMS_lon_regexp = r'([-+])?\s*(((180)\s*(\/|\:|\s|\º)\s*((0*)\s*(\/|\:|\s|\'))?\s*((0*)(\.(0*))?(\")?)?)|(([1]?[1-7]\d)|\d?\d)\s*(\/|\:|\s|\º)\s*([1-5]?\d)\s*(\/|\:|\s|\')\s*([1-5]?\d(\.(\d*))?)\s*(\")?)\s*([eEwW])?'
 
-DDM_lat_regexp =  r'[+-]?(((90)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)((0*)(\.0*)?(\')?)?)|([1-8]?\d)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)?[1-5]?\d(\.\d+)?(\')?)(\s*)?([nNsS])?'
-DDM_lon_regexp = r'[+-]?(((180)(\s*)(\/|\:|\s|\º)(\s*)?(\s*)((0*)(\.0*)?(\')?)?)|(([1]?[1-7]\d)|\d?\d)(\s*)(\/|\:|\s|\º)(\s*)[1-5]?\d(\.\d+)?(\'))(\s*)([eEwW])?'
+DDM_lat_regexp =  r'([+-])?(((90)\s*(\/|\:|\s|\º)\s*((0*)(\.(0*))?(\')?)?)|([1-8]?\d)\s*(\/|\:|\s|\º)\s*(([1-5]?\d(\.(\d+)?))(\')?))\s*([nNsS])?'
+DDM_lon_regexp = r'([+-])?(((180)\s*(\/|\:|\s|\º)\s*((0*)(\.(0*))?(\')?)?)|(([1]?[1-7]\d)|\d?\d)\s*(\/|\:|\s|\º)\s*[1-5]?\d(\.(\d+))?(\'))\s*([eEwW])?'
 
-DD_lat_regexp = r'[+-]?(((90)(\.(0*)))|(([1-8]?\d)(\.(\d+))))((\s*)(\º)?)((\s*)[nNsS])?'
-DD_lon_regexp = r'[+-]?(((180)(\.(0*)))|((([1]?[1-7]\d)|(\d?\d))(\.\d+)?))((\s*)(\º)?)((\s*)[eEwW])?'
+DD_lat_regexp = r'([+-])?(((90)(\.(0*))?)|([1-8]?\d)(\.(\d+))?)\s*(\º)?\s*([nNsS])?'
+DD_lon_regexp = r'([+-])?(((180)(\.(0*))?)|(([1]?[0-7]\d)|(\d?\d))(\.(\d+))?)\s*(\º)?\s*([eEwW])?'
 
-dmsLatRegEx = r'^-?((90\/[0]*\/[0]*$)|([1-8]?\d))(\/|\:|\ )(([1-5]?\d))(\/|\:|\ )[1-5]?\d(\.\d*)?$'
-dmsLatIsoRegEx = r'^[-+]?((90\/[0]*\/[0]*$)|([1-8]?\d))(\º)?(\s*)(\/|\:|\ )(([1-5]?\d)(\')?)(\s*)((\/|\:|\ )[1-5]?\d(\.\d*)?(\")?)(\s*)([NS])?$'
-dmsLonRegEx = r'^-?((180(\/|\:| )0(\/|\:| )0((\.0*)?))|(([1]?[1-7]\d)|\d?\d)(\/|\:| )([1-5]?\d)(\/|\:| )[1-5]?\d(\.\d*)?$)'
-decimalRegEx = r"^-?(180((\.0*)?)|([1]?[0-7]?\d(\.\d*)?))$"
+dmsLatRegEx = r'^-?((90\/[0]*\/[0]*$)|([1-8]?\d))(\/|\:|\ )(([1-5]?\d))(\/|\:|\ )[1-5]?\d(\.(\d*))?$'
+#dmsLatIsoRegEx = r'^[-+]?((90\/[0]*\/[0]*$)|([1-8]?\d))(\º)?(\s*)(\/|\:|\ )(([1-5]?\d)(\')?)(\s*)((\/|\:|\ )[1-5]?\d(\.\d*)?(\")?)(\s*)([NS])?$'
+dmsLonRegEx = r'^-?((180(\/|\:| )0(\/|\:| )0((\.0*)?))|(([1]?[1-7]\d)|\d?\d)(\/|\:| )([1-5]?\d)(\/|\:| )[1-5]?\d(\.(\d*))?$)'
+decimalRegEx = r"^-?(180((\.(0*))?)|([1]?[0-7]?\d(\.(\d*))?))$"
 mgrsRegEx = r"^\d{1,2}[^ABIOYZabioyz][A-Za-z]{2}([0-9][0-9]){1,5}$"
 utmRegEx = r"^\d(\/|\:| |)[^aboiyzABOIYZ\d\[-\` -@](\/|\:| |)\d{2,}$"
 
@@ -117,6 +117,7 @@ if __name__ == "__main__":
     print "\nTesting all examples that should show MATCH:"
     for match in dmsLatMatches:
         unitTester(match, True, regexCheck(DMS_lat_regexp, match))
+
     print "\nTesting all NEW examples that should show NO MATCH:"
     for fail in dmsLatFails_new:
         unitTester(fail, False, regexCheck(DMS_lat_regexp, fail))
@@ -139,6 +140,19 @@ if __name__ == "__main__":
     for match in decimalMatches:
         unitTester(match, True, regexCheck(decimalRegEx, match))
 
+    print "\nTesting all examples that should show NO MATCH"
+    for fail in decimalFails:
+        unitTester(fail, False, regexCheck(DD_lon_regexp, fail))
+    print "\nTesting all examples that should show MATCH:"
+    for match in decimalMatches:
+        unitTester(match, True, regexCheck(DD_lon_regexp, match))
+    quit()
+    for fail in decimalFails:
+        unitTester(fail, False, regexCheck(DD_lon_regexp, fail))
+    print "\nTesting all examples that should show MATCH:"
+    for match in decimalMatches:
+        unitTester(match, True, regexCheck(DD_lon_regexp, match))
+    quit()
     print "\n----Testing MGRS coordinates----"
     print "Testing all examples that should show NO MATCH:"
     for fail in mgrsFails:
