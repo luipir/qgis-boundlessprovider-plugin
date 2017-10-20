@@ -43,11 +43,18 @@ from geodesy_regex import (
     DMS_lon_regexp,
     DDM_lat_regexp,
     DDM_lat_regexp,
-    mgrsRegEx,
-    utmRegEx
 )
 
-from latlontool.mgrs import toMgrs, toWgs
+# external pypi library pygeodesy with MIT license
+# https://github.com/mrJean1/PyGeodesy
+# https://pypi.python.org/pypi/PyGeodesy
+# pygeodesy is used to parse MGRS and UTM, but LatLon is parsed
+# using complex custom RegExp that allow more flexibility in format
+# e.g. LatLon is NOT parsed using pygeodesy parser
+from pygeodesy import 
+    mgrs,
+    utm,
+)
 
 class CoordinateFormatConversion(GeoAlgorithm):
     """Algorithm to transform coordinate format adding a add a new
@@ -80,8 +87,7 @@ class CoordinateFormatConversion(GeoAlgorithm):
         {'lat':re.compile(self.DD_lat_regexp), 'lon':re.compile(self.DD_lon_regexp)},
         {'lat':re.compile(self.DMS_lat_regexp), 'lon':re.compile(self.DMS_lon_regexp)},
         {'lat':re.compile(self.DDM_lat_regexp), 'lon':re.compile(self.DDM_lat_regexp)},
-        {'lat':re.compile(self.mgrsRegEx)}, 'lon':re.compile(self.mgrsRegEx)},
-        {'lat':re.compile(self.utmRegEx)}, 'lon':re.compile(self.utmRegEx)}}]
+    ]
     CUSTOM_COORD_FORMAT = u'{degree}º{minutes}\'{seconds}"'
     SINGLE_FIELD_COORD_FORMAT = '{X} {Y}'
     FIELD_LENGHT = 10
@@ -100,8 +106,8 @@ class CoordinateFormatConversion(GeoAlgorithm):
         # We add the input vector layer. It can have any kind of geometry
         # It is a mandatory (not optional) one, hence the False argument
         self.addParameter(ParameterTable(self.SOURCE_TABLE, 'Source table', optional=False))
-        self.addParameter(ParameterTableField(self.SOURCE_X_FIELD, "X field (longitude)", parent=self.SOURCE_TABLE))
-        self.addParameter(ParameterTableField(self.SOURCE_Y_FIELD, "Y field (latitude)", parent=self.SOURCE_TABLE))
+        self.addParameter(ParameterTableField(self.SOURCE_X_FIELD, "X (lon) or mgrs field ", parent=self.SOURCE_TABLE, optional=True))
+        self.addParameter(ParameterTableField(self.SOURCE_Y_FIELD, "Y (lat) or mgrs field", parent=self.SOURCE_TABLE, optional=True))
         self.addParameter(ParameterSelection(self.SOURCE_FORMAT, "Source format", options=self.FORMAT_LIST, default=0))
         self.addParameter(ParameterSelection(self.DESTINATION_FORMAT, "Destination format", options=self.FORMAT_LIST, default=0, optional=True))
         self.addParameter(ParameterString(self.CUSTOM_FORMAT, "Custom coordinate format", default=self.CUSTOM_COORD_FORMAT, optional=True))
@@ -116,6 +122,11 @@ class CoordinateFormatConversion(GeoAlgorithm):
         """Here is where the processing itself takes place."""
 
         # check input parameters
+        SOURCE_X_FIELD_value = self.getParameterValue(self.SOURCE_X_FIELD)
+        SOURCE_Y_FIELD_value = self.getParameterValue(self.SOURCE_X_FIELD)
+        if not SOURCE_X_FIELD_value and not SOURCE_Y_FIELD_value:
+            raise GeoAlgorithmExecutionException('At least an input field have to be set')
+
         OUTPUT_X_FIELD_value = self.getParameterValue(self.OUTPUT_X_FIELD)
         OUTPUT_Y_FIELD_value = self.getParameterValue(self.OUTPUT_Y_FIELD)
         OUTPUT_XY_FIELD_value = self.getParameterValue(self.OUTPUT_XY_FIELD)
@@ -134,21 +145,28 @@ class CoordinateFormatConversion(GeoAlgorithm):
         OUTPUT_COORDINATE_FORMAT_value = self.getParameterValue(self.OUTPUT_COORDINATE_FORMAT)
         if OUTPUT_XY_FIELD_value and not OUTPUT_COORDINATE_FORMAT_value:
             raise GeoAlgorithmExecutionException('If OUTPUT_XY_FIELD is set, it\'s necessary to set also OUTPUT_COORDINATE_FORMAT' )
+        
+        SOURCE_FORMAT_value = self.getParameterValue(self.SOURCE_FORMAT)
+        if SOURCE_FORMAT_value == MGRS_index and SOURCE_X_FIELD_value and SOURCE_Y_FIELD_value:
+            raise GeoAlgorithmExecutionException('Ambiguity: OUTPUT_COORDINATE_FORMAT is {} and both SOURCE_X_FIELD and SOURCE_Y_FIELD are set. Please select only one source field'.format(self.FORMAT_LIST[OUTPUT_COORDINATE_FORMAT_value]) )
 
         # get parameters
-        SOURCE_FORMAT_value = self.getParameterValue(self.SOURCE_FORMAT)
-
-        DESTINATION_FORMAT_value = self.getParameterValue(self.DESTINATION_FORMAT)
         fieldType = QVariant.String
-        if DESTINATION_FORMAT_value in [DD_index, UTM_index]:
+        if DESTINATION_FORMAT_value in [DD_index]:
             fieldType = QVariant.Double
 
         output = self.getOutputFromName(self.OUTPUT_TABLE)
 
         # do process
+
         layer = processing.getObject(self.SOURCE_TABLE)
-        sourceXFieldIndex = inputTable.fieldNameIndex(X_coord_longitude)
-        sourceYFieldIndex = inputTable.fieldNameIndex(Y_coord_latitude)
+        sourceXFieldIndex = None
+        sourceYFieldIndex = None
+        if SOURCE_X_FIELD_value:
+            sourceXFieldIndex = inputTable.fieldNameIndex(SOURCE_X_FIELD_value)
+        if SOURCE_Y_FIELD_value:
+            sourceYFieldIndex = inputTable.fieldNameIndex(SOURCE_Y_FIELD_value)
+        
         # set new field types
         # copy table structure and add new columns
         fields = layer.fields()
@@ -164,19 +182,64 @@ class CoordinateFormatConversion(GeoAlgorithm):
             fields.append(QgsField(OUTPUT_XY_FIELD_value,  QVariant.String, '', 20, 20))
 
             OUTPUT_XY_FIELD_index = fields.size()
+        
+        # create writer
         writer = output.getVectorWriter(fields, layer.wkbType(), layer.crs())
         outFeat = QgsFeature()
         features = vector.features(layer)
         total = 100.0 / len(features) if len(features) > 0 else 1
+
+        # populate new layer
         for current, feat in enumerate(features):
             progress.setPercentage(int(current * total))
             # get source data to transform
             attributes = feat.attributes()
-            x = str(attributes[sourceXFieldIndex])
-            y = str(attributes[sourceYFieldIndex])
+            x = None
+            y = None
+            if sourceXFieldIndex:
+                x = str(attributes[sourceXFieldIndex]).replace(' ', '')
+            if sourceYFieldIndex:
+                y = str(attributes[sourceYFieldIndex]).replace(' ', '')
 
-            # from source to dest
-            newX = lonFromSourceToWgs(x, SOURCE_FORMAT_value, DESTINATION_FORMAT_value)
+            # from source to wgs
+            try:
+                if SOURCE_FORMAT_value == MGRS_index:
+                    mgrsObject = mgrs.parseMGRS( x? x:y )
+                    utmObject = mgrsObject.toUtm()
+                    latLonObject = utmObject.toLatLon()
+                    newX = latLonObject.lon()
+                    newY = latLonObject.lat()
+                elif SOURCE_FORMAT_value == UTM_index:
+                    utmObject = utm.parseUTM( x? x:y )
+                    latLonObject = utmObject.toLatLon()
+                    newX = latLonObject.lon()
+                    newY = latLonObject.lat()
+                elif SOURCE_FORMAT_value in [DD_index, DMS_index, DDM_index]
+                    newX = self.lonFromSourceToWgs(x, SOURCE_FORMAT_value)
+                    newY = self.latFromSourceToWgs(y, SOURCE_FORMAT_value)
+                else:
+                    raise GeoAlgorithmExecutionException('Unrecognised SOURCE_FORMAT in feature with id {}. It should be one of: {}'format(feat.id(), str(self.FORMAT_LIST) )
+
+            except Exception as ex:
+                raise GeoAlgorithmExecutionException(unicode(ex))
+
+            # wrom wgs to destination format
+            if SOURCE_FORMAT_value == MGRS_index:
+                mgrsObject = mgrs.parseMGRS( x? x:y )
+                utmObject = mgrsObject.toUtm()
+                latLonObject = utmObject.toLatLon()
+                newX = latLonObject.lon()
+                newY = latLonObject.lat()
+            elif SOURCE_FORMAT_value == UTM_index:
+                utmObject = utm.parseUTM( x? x:y )
+                latLonObject = utmObject.toLatLon()
+                newX = latLonObject.lon()
+                newY = latLonObject.lat()
+            elif SOURCE_FORMAT_value in [DD_index, DMS_index, DDM_index]
+                newX = self.lonFromSourceToWgs(x, SOURCE_FORMAT_value)
+                newY = self.latFromSourceToWgs(y, SOURCE_FORMAT_value)
+            else:
+                raise GeoAlgorithmExecutionException('Unrecognised SOURCE_FORMAT in feature with id {}. It should be one of: {}'format(feat.id(), str(self.FORMAT_LIST) )
 
             geom = feat.geometry()
             outFeat.setGeometry(geom)
@@ -191,6 +254,9 @@ class CoordinateFormatConversion(GeoAlgorithm):
         Beaware that regext group position have to be aligned to the 
         related regexp 
         """
+        if not value or not sourceFormatIndex:
+            return None
+
         expression = FORMAT_REGEXP[sourceFormatIndex]['lon']
         match = expression.match(value)
         # general parsing error
@@ -230,12 +296,6 @@ class CoordinateFormatConversion(GeoAlgorithm):
                 degrees = float(match.group(11))
                 minutes = float(match.group(14))
             return sign * degrees + minutes/60.0
-        elif sourceFormatIndex == MGRS_index:
-            # ???????????????
-            pass
-        elif sourceFormatIndex == UTM_index:
-            # ???????????????
-            pass
         else:
             raise GeoAlgorithmExecutionException('Invalid SOURCE_FORMAT value' )
 
@@ -244,6 +304,9 @@ class CoordinateFormatConversion(GeoAlgorithm):
         Beaware that regext group position have to be aligned to the 
         related regexp 
         """
+        if not value or not sourceFormatIndex:
+            return None
+
         expression = FORMAT_REGEXP[sourceFormatIndex]['lat']
         match = expression.match(value)
         # general parsing error
@@ -283,12 +346,6 @@ class CoordinateFormatConversion(GeoAlgorithm):
                 degrees = float(match.group(12))
                 minutes = float(match.group(14))
             return sign * degrees + minutes/60.0
-        elif sourceFormatIndex == MGRS_index:
-            # ???????????????
-            pass
-        elif sourceFormatIndex == UTM_index:
-            # ???????????????
-            pass
         else:
             raise GeoAlgorithmExecutionException('Invalid SOURCE_FORMAT value' )
 
